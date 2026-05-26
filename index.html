@@ -236,35 +236,6 @@ td.cf{color:var(--tx3)}
 
 <main>
 <aside>
-  <div class="sec">
-    <div class="slbl">출력 모드</div>
-    <div class="stabs c2">
-      <button class="stab on" id="tm-new" onclick="setMode('new')">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>신규 생성
-      </button>
-      <button class="stab" id="tm-app" onclick="setMode('append')">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>이어 붙이기
-      </button>
-    </div>
-  </div>
-
-  <div id="upload-sec" style="display:none">
-    <div class="sec">
-      <div class="slbl">기존 엑셀 업로드</div>
-      <div class="upzone" id="upzone">
-        <input type="file" accept=".xlsx,.xls" id="file-inp" onchange="onFileChange(event)"/>
-        <div style="color:var(--g);margin-bottom:5px"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5-5 5 5m-5-5v12"/></svg></div>
-        <div class="ut">드래그하거나 클릭하여 업로드</div>
-        <div class="us">.xlsx / .xls</div>
-      </div>
-      <div id="fchip" style="display:none" class="fchip">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <span class="fcn" id="chip-name"></span><span class="fcr" id="chip-rows"></span>
-        <button class="fcd" onclick="clearUpload()">×</button>
-      </div>
-      <div id="pinfo" style="display:none" class="pinfo"></div>
-    </div>
-  </div>
 
   <div class="sec">
     <div class="slbl">스케줄 유형</div>
@@ -338,7 +309,6 @@ td.cf{color:var(--tx3)}
       </div>
     </div>
     <div class="sbar" id="sbar" style="display:none">
-      <div class="sc"><div class="slb2">기존 행</div><div class="sv vt" id="s-exist">—</div></div>
       <div class="sc"><div class="slb2">신규 행</div><div class="sv vg" id="s-new">0</div></div>
       <div class="sc"><div class="slb2">총 합계</div><div class="sv vp" id="s-total">0</div></div>
       <div class="sc"><div class="slb2">SRL 범위</div><div class="sv va" id="s-srl">—</div></div>
@@ -493,18 +463,10 @@ async function saveSRL() {
 /* ═══ 상태 ═══ */
 const COLS=['TnmtScheduleSrl','VersionId','TnmtId','DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate','IsDeleted','DeletedDate'];
 const BULK_N=126;
-let curMode='new', curType='tournament';
-let newRows=[], uploadedWb=null, uploadedSheet='', existRows=[], existHdr=[];
+let curType='tournament';
+let newRows=[];
 
-/* ═══ Mode / Type ═══ */
-function setMode(m){
-  curMode=m;
-  document.getElementById('tm-new').classList.toggle('on',m==='new');
-  document.getElementById('tm-app').classList.toggle('on',m==='append');
-  document.getElementById('upload-sec').style.display=m==='append'?'':'none';
-  document.getElementById('dl-lbl').textContent=m==='append'?'이어붙여 다운로드':'엑셀 다운로드';
-  if(m==='new')clearUpload();
-}
+/* ═══ Type ═══ */
 function setType(t){
   curType=t;
   document.getElementById('tt-t').classList.toggle('on',t==='tournament');
@@ -549,34 +511,6 @@ function updCount(){
 }
 function clearAllBulk(){ if(!confirm('초기화할까요?')) return; for(let i=1;i<=BULK_N;i++){document.getElementById('bt-'+i).value='';document.getElementById('bm-'+i).value='';updRow(i);} }
 function fillBulk(rows){ for(let i=0;i<BULK_N;i++){const n=i+1;document.getElementById('bt-'+n).value=rows[i]?(rows[i].tnmt_id||rows[i].t||''):'';document.getElementById('bm-'+n).value=rows[i]?(rows[i].start_time||rows[i].m||''):'';updRow(n);} }
-
-/* ═══ File upload ═══ */
-function onFileChange(e){const f=e.target.files[0];if(f)readXL(f);}
-const uz=document.getElementById('upzone');
-uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('drag');});
-uz.addEventListener('dragleave',()=>uz.classList.remove('drag'));
-uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)readXL(f);});
-function readXL(file){
-  const rd=new FileReader();
-  rd.onload=ev=>{
-    try{
-      uploadedWb=XLSX.read(ev.target.result,{type:'binary'});
-      uploadedSheet=uploadedWb.SheetNames[0];
-      const data=XLSX.utils.sheet_to_json(uploadedWb.Sheets[uploadedSheet],{header:1,defval:''});
-      existHdr=data[0].map(String); existRows=data.slice(1).filter(r=>r.some(v=>v!==''));
-      const si=existHdr.findIndex(h=>h.toLowerCase().includes('srl'));
-      let ns=null; if(si>=0){const v=existRows.map(r=>parseInt(r[si])).filter(v=>!isNaN(v));if(v.length)ns=Math.max(...v)+1;}
-      if(ns){document.getElementById('srl-start').value=ns;document.getElementById('srl-hint').textContent='↑ 파일에서 자동 감지됨';}
-      document.getElementById('fchip').style.display='flex';
-      document.getElementById('chip-name').textContent=file.name;
-      document.getElementById('chip-rows').textContent=existRows.length+'행';
-      const pi=document.getElementById('pinfo');pi.style.display='block';
-      pi.innerHTML=`시트: <span>${uploadedSheet}</span> &nbsp; 기존: <span>${existRows.length}행</span> &nbsp; 다음 SRL: <span>${ns??'미감지'}</span>`;
-    }catch(err){alert('파일 읽기 실패: '+err.message);}
-  };
-  rd.readAsBinaryString(file);
-}
-function clearUpload(){uploadedWb=null;uploadedSheet='';existRows=[];existHdr=[];document.getElementById('fchip').style.display='none';document.getElementById('pinfo').style.display='none';document.getElementById('file-inp').value='';document.getElementById('srl-hint').textContent='';}
 
 /* ═══ CSV ═══ */
 function exportCSV(){
@@ -700,31 +634,24 @@ function mkRow(srl,ver,tid,dp,cr,pu,st,s,reg){
 
 /* ═══ Generate ═══ */
 function generate(){
-  if(curMode==='append'&&!uploadedWb){alert('이어붙이기 모드에서는 먼저 엑셀 파일을 업로드해주세요.');return;}
   if(curType==='regular'&&(!document.getElementById('r-from-d').value||!document.getElementById('r-to-d').value)){alert('정기 스케줄의 시작/종료 날짜를 설정해주세요.');return;}
   newRows=buildRows();
   if(!newRows.length){alert('입력된 데이터가 없습니다.');return;}
   document.getElementById('bulk-dl').disabled=false;
   document.getElementById('view-prev').style.display='';
   document.getElementById('view-bulk').style.display='none';
-  const ec=curMode==='append'?existRows.length:0,total=ec+newRows.length;
   const sf=newRows[0].TnmtScheduleSrl,sl=newRows[newRows.length-1].TnmtScheduleSrl;
   document.getElementById('sbar').style.display='flex';
-  document.getElementById('s-exist').textContent=curMode==='append'?ec:'—';
   document.getElementById('s-new').textContent=newRows.length;
-  document.getElementById('s-total').textContent=total;
+  document.getElementById('s-total').textContent=newRows.length;
   document.getElementById('s-srl').textContent=sf===sl?sf:`${sf}–${sl}`;
-  document.getElementById('csub').textContent=curMode==='append'?`기존 ${ec}행 + 신규 ${newRows.length}행 = 총 ${total}행`:`${newRows.length}개 행 생성됨 · ${curType==='tournament'?'대회':'정기'} 스케줄`;
+  document.getElementById('csub').textContent=`${newRows.length}개 행 생성됨 · ${curType==='tournament'?'대회':'정기'} 스케줄`;
   function cc(col,isNew){
     if(col==='TnmtScheduleSrl')return isNew?'cs':'cse';
     if(col==='TnmtId')return'ct';if(col==='StartDate')return'cst cd';
     if(['DisplayDate','CreateDate','PushDate','StandbyDate','RegDate'].includes(col))return'cd';return'';
   }
   let html='<thead><tr>'+COLS.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
-  if(curMode==='append'&&existRows.length){
-    existRows.forEach(r=>{html+='<tr class="rex">'+COLS.map(c=>{const idx=existHdr.indexOf(c);return`<td class="${cc(c,false)}">${idx>=0?(r[idx]??''):''}</td>`;}).join('')+'</tr>';});
-    html+=`<tr class="divr"><td colspan="${COLS.length}">▼ 신규 추가 — ${newRows.length}행</td></tr>`;
-  }
   newRows.forEach(r=>{html+='<tr class="rnew">'+COLS.map(c=>{const v=r[c]??'';return`<td class="${cc(c,true)}${v==='FALSE'?' cf':''}">${v}</td>`;}).join('')+'</tr>';});
   html+='</tbody>';
   const back=curType==='regular'?`<div style="margin-bottom:9px"><button class="btn bg" onclick="backBulk()"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>입력 테이블로 돌아가기</button></div>`:'';
@@ -750,82 +677,33 @@ function parseExcelDate(str){
 /* ═══ Download ═══ */
 function downloadExcel(){
   if(!newRows.length)return;
-  let wb,fname;
-  if(curMode==='append'&&uploadedWb){
-    wb=uploadedWb;const ws=wb.Sheets[uploadedSheet];
-    const range=XLSX.utils.decode_range(ws['!ref']||'A1');let lr=range.e.r;
-    const hm={};existHdr.forEach((h,i)=>{hm[h]=i;});
-
-    // 기존 데이터 1행에서 각 컬럼의 셀 타입 파악
-    const colTypeMap={};
-    if(existRows.length>0){
-      COLS.forEach(col=>{
-        const ci=hm[col];
-        if(ci===undefined)return;
-        // 헤더(row0) 다음 첫 데이터행(row2)의 셀 타입 확인
-        const addr=XLSX.utils.encode_cell({r:2,c:ci});
-        const cell=ws[addr];
-        if(cell)colTypeMap[col]=cell.t;
-      });
-    }
-
-    const dateCols2=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
-    newRows.forEach(row=>{
-      lr++;
-      COLS.forEach(col=>{
-        const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col);
-        const v=row[col]??'';
-        const existType=colTypeMap[col];
-        let cellObj;
+  const wb=XLSX.utils.book_new();
+  const ws={};
+  const allRows=[COLS,...newRows.map(r=>COLS.map(c=>r[c]??''))];
+  const dateCols=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
+  allRows.forEach((row,ri)=>{
+    row.forEach((v,ci)=>{
+      const addr=XLSX.utils.encode_cell({r:ri,c:ci});
+      if(ri===0){
+        ws[addr]={v:String(v),t:'s'};
+      } else {
+        const col=COLS[ci];
         if(typeof v==='number'){
-          cellObj={v,t:'n'};
-        } else if(dateCols2.has(col)&&v!==''){
+          ws[addr]={v,t:'n'};
+        } else if(dateCols.has(col)&&v!==''){
           const parsed=parseExcelDate(String(v));
-          if(parsed!=null){
-            cellObj={v:parsed,t:'n',z:'YYYY-MM-DD  H:MM:SS AM/PM'};
-          } else {
-            cellObj={v:String(v),t:'s'};
-          }
-        } else if(existType&&existType!=='s'){
-          cellObj={v:String(v),t:existType};
+          ws[addr]=parsed!=null?{v:parsed,t:'n',z:'YYYY-MM-DD  H:MM:SS AM/PM'}:{v:String(v),t:'s'};
         } else {
-          cellObj={v:String(v),t:'s'};
-        }
-        ws[XLSX.utils.encode_cell({r:lr,c:ci})]=cellObj;
-      });
-    });
-    const nr=XLSX.utils.decode_range(ws['!ref']);nr.e.r=lr;nr.e.c=Math.max(nr.e.c,COLS.length-1);ws['!ref']=XLSX.utils.encode_range(nr);
-    fname=`${uploadedSheet.replace(/[^a-zA-Z0-9가-힣_-]/g,'_')}_append_${new Date().toISOString().slice(0,10)}.xlsx`;
-  }else{
-    wb=XLSX.utils.book_new();
-    const ws={};
-    const allRows=[COLS,...newRows.map(r=>COLS.map(c=>r[c]??''))];
-    const dateCols=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
-    allRows.forEach((row,ri)=>{
-      row.forEach((v,ci)=>{
-        const addr=XLSX.utils.encode_cell({r:ri,c:ci});
-        if(ri===0){
           ws[addr]={v:String(v),t:'s'};
-        } else {
-          const col=COLS[ci];
-          if(typeof v==='number'){
-            ws[addr]={v,t:'n'};
-          } else if(dateCols.has(col)&&v!==''){
-            // 날짜 문자열 → 엑셀 날짜 시리얼로 변환
-            const parsed=parseExcelDate(String(v));
-            ws[addr]=parsed!=null?{v:parsed,t:'n',z:'YYYY-MM-DD  H:MM:SS AM/PM'}:{v:String(v),t:'s'};
-          } else {
-            ws[addr]={v:String(v),t:'s'};
-          }
         }
-      });
+      }
     });
-    ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:allRows.length-1,c:COLS.length-1}});
-    ws['!cols']=COLS.map(c=>({wch:c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16}));
-    COLS.forEach((_,i)=>{const cell=XLSX.utils.encode_cell({r:0,c:i});if(ws[cell])ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}};});
-    XLSX.utils.book_append_sheet(wb,ws,'TnmtSchedule');
-    fname=`schedule_${curType}_${new Date().toISOString().slice(0,10)}.xlsx`;
-  }
+  });
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:allRows.length-1,c:COLS.length-1}});
+  ws['!cols']=COLS.map(c=>({wch:c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16}));
+  COLS.forEach((_,i)=>{const cell=XLSX.utils.encode_cell({r:0,c:i});if(ws[cell])ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}};});
+  XLSX.utils.book_append_sheet(wb,ws,'TnmtSchedule');
+  const fname=`schedule_${curType}_${new Date().toISOString().slice(0,10)}.xlsx`;
   XLSX.writeFile(wb,fname);
 }
 
