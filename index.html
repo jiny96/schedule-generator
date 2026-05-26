@@ -174,6 +174,12 @@ td.cf{color:var(--tx3)}
 .tpl-meta{font-size:10px;color:var(--tx3);margin-top:1px}
 .tpl-acts{display:flex;gap:5px;flex-shrink:0}
 
+.t-time-item{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.t-time-item input{flex:1;background:var(--surf);border:1px solid var(--br2);border-radius:var(--rs);padding:6px 8px;font-size:12px;color:var(--tx);font-family:'JetBrains Mono',monospace;outline:none}
+.t-time-item input:focus{border-color:var(--g2);box-shadow:0 0 0 2px var(--gdim)}
+.t-time-del{background:transparent;border:1px solid var(--br2);border-radius:var(--rs);width:28px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx3);flex-shrink:0;font-size:14px}
+.t-time-del:hover{border-color:var(--red);color:var(--red)}
+
 /* Empty */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:280px;color:var(--tx3);gap:9px}
 .eico{width:48px;height:48px;background:var(--bg3);border:1px solid var(--br);border-radius:12px;display:flex;align-items:center;justify-content:center}
@@ -282,13 +288,19 @@ td.cf{color:var(--tx3)}
   <div id="sec-t">
     <div class="sec">
       <div class="slbl">대회 설정</div>
-      <div class="ichip">SRL <strong>20000번대</strong> · StartDate 기준 자동 계산</div>
+      <div class="ichip">SRL <strong>20000번대</strong> · 날짜 범위 × 시간 목록으로 행 생성</div>
       <div class="f"><label>TnmtId</label><input type="text" id="tnmt-id" placeholder="토너먼트 ID"/></div>
       <div class="fr2">
         <div class="f"><label>시작 날짜</label><input type="date" id="d-from"/></div>
         <div class="f"><label>종료 날짜</label><input type="date" id="d-to"/></div>
       </div>
-      <div class="f"><label>시작 시간</label><input type="time" id="s-time" value="19:00"/></div>
+      <div class="f">
+        <label>시작 시간 목록</label>
+        <div id="t-time-list"></div>
+        <button type="button" class="btn bg" style="width:100%;margin-top:5px;justify-content:center" onclick="addTournamentTime()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>시간 추가
+        </button>
+      </div>
     </div>
   </div>
 
@@ -619,6 +631,27 @@ function fmtDate(d){
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${h12}:${mi}:${sc} ${ap}`;
 }
 
+/* ═══ Tournament time list ═══ */
+let tTimeCount = 0;
+function addTournamentTime(val) {
+  tTimeCount++;
+  const n = tTimeCount;
+  const div = document.createElement('div');
+  div.className = 't-time-item'; div.id = 'tt-' + n;
+  div.innerHTML = `<input type="time" id="ttv-${n}" value="${val||'19:00'}"/><button type="button" class="t-time-del" onclick="delTournamentTime(${n})">×</button>`;
+  document.getElementById('t-time-list').appendChild(div);
+}
+function delTournamentTime(n) {
+  const el = document.getElementById('tt-' + n);
+  if (el) el.remove();
+  // 최소 1개 유지
+  if (!document.querySelectorAll('.t-time-item').length) addTournamentTime();
+}
+function getTournamentTimes() {
+  return Array.from(document.querySelectorAll('.t-time-item input'))
+    .map(el => el.value).filter(v => v !== '').sort();
+}
+
 /* ═══ Build rows ═══ */
 function buildRows(){
   const srl0=parseInt(document.getElementById('srl-start').value)||(curType==='regular'?100001:20001);
@@ -628,13 +661,17 @@ function buildRows(){
   const rows=[];let srl=srl0;
   if(curType==='tournament'){
     const tid=document.getElementById('tnmt-id').value||'';
-    const fv=document.getElementById('d-from').value,tv=document.getElementById('d-to').value,tm=document.getElementById('s-time').value||'19:00';
+    const fv=document.getElementById('d-from').value, tv=document.getElementById('d-to').value;
     if(!fv||!tv)return[];
-    const[th,tmm]=tm.split(':').map(Number);
+    const times=getTournamentTimes();
+    if(!times.length)return[];
     for(let d=new Date(fv+'T00:00:00');d<=new Date(tv+'T00:00:00');d.setDate(d.getDate()+1)){
-      const s=new Date(d);s.setHours(th,tmm,0,0);
-      const dp=new Date(s);dp.setHours(2,0,0,0);const cr=new Date(s);cr.setHours(2,0,0,0);
-      rows.push(mkRow(srl++,ver,tid,dp,cr,new Date(s.getTime()-5*60000),new Date(s.getTime()-5*60000),s,reg));
+      for(const tm of times){
+        const[th,tmm]=tm.split(':').map(Number);
+        const s=new Date(d);s.setHours(th,tmm,0,0);
+        const dp=new Date(s);dp.setHours(2,0,0,0);const cr=new Date(s);cr.setHours(2,0,0,0);
+        rows.push(mkRow(srl++,ver,tid,dp,cr,new Date(s.getTime()-5*60000),new Date(s.getTime()-5*60000),s,reg));
+      }
     }
   }else{
     const df=document.getElementById('r-from-d').value,tf=document.getElementById('r-from-t').value||'00:00';
@@ -772,6 +809,7 @@ async function delTpl(id,name){
 (function(){
   document.getElementById('reg-date').value=new Date().toISOString().slice(0,10);
   initBulk();
+  addTournamentTime('19:00');
   ['r-from-d','r-from-t','r-to-d','r-to-t'].forEach(id=>document.getElementById(id).addEventListener('input',updateRangeSummary));
   loadSRL();
 })();
