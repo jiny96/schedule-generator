@@ -679,8 +679,7 @@ function downloadExcel(){
   if(!newRows.length)return;
   const wb=XLSX.utils.book_new();
   const ws={};
-  const COLS_OUT=COLS.slice(0,10); // DeletedDate(K열) 제외, IsDeleted(J열)까지만
-  const allRows=[COLS_OUT,...newRows.map(r=>COLS_OUT.map(c=>r[c]??''))];
+  const allRows=[COLS,...newRows.map(r=>COLS.map(c=>r[c]??''))];
   const dateCols=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
   allRows.forEach((row,ri)=>{
     row.forEach((v,ci)=>{
@@ -688,7 +687,7 @@ function downloadExcel(){
       if(ri===0){
         ws[addr]={v:String(v),t:'s'};
       } else {
-        const col=COLS_OUT[ci];
+        const col=COLS[ci];
         if(typeof v==='number'){
           ws[addr]={v,t:'n'};
         } else if(dateCols.has(col)&&v!==''){
@@ -702,9 +701,9 @@ function downloadExcel(){
       }
     });
   });
-  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:allRows.length-1,c:COLS_OUT.length-1}});
-  ws['!cols']=COLS_OUT.map(c=>({wch:c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16}));
-  COLS_OUT.forEach((_,i)=>{const cell=XLSX.utils.encode_cell({r:0,c:i});if(ws[cell])ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}};});
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:allRows.length-1,c:COLS.length-1}});
+  ws['!cols']=COLS.map(c=>({wch:c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16}));
+  COLS.forEach((_,i)=>{const cell=XLSX.utils.encode_cell({r:0,c:i});if(ws[cell])ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}};});
   XLSX.utils.book_append_sheet(wb,ws,'TnmtSchedule');
   const fname=`schedule_${curType}_${new Date().toISOString().slice(0,10)}.xlsx`;
   XLSX.writeFile(wb,fname);
