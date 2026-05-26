@@ -628,7 +628,7 @@ function pad(n){return String(n).padStart(2,'0');}
 function fmtDate(d){
   const h24=d.getHours(),mi=pad(d.getMinutes()),sc=pad(d.getSeconds());
   const ap=h24>=12?'PM':'AM',h12=h24%12||12;
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${h12}:${mi}:${sc} ${ap}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}  ${h12}:${mi}:${sc} ${ap}`;
 }
 
 /* ═══ Tournament time list ═══ */
