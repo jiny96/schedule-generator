@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>스케줄 자동 생성기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f2ea;--bg2:#edeadf;--bg3:#e4e0d3;
+  --surf:#fff;--surf2:#f9f7f1;
+  --br:rgba(80,100,60,0.13);--br2:rgba(80,100,60,0.22);
+  --tx:#2c3320;--tx2:#5a6645;--tx3:#96a07e;
+  --g:#3d7a4f;--g2:#4e9a64;--gdim:#d4ebdb;--gbg:#eaf4ee;
+  --teal:#2e7d6b;
+  --amb:#8a6a1e;--adim:#f0e4c0;
+  --red:#a03030;--rdim:#f5dada;
+  --pur:#5a4fa0;--pdim:#e0dcf5;
+  --r:10px;--rs:6px;
+  --sh:0 1px 4px rgba(60,80,40,.10);
+}
+html{background:var(--bg);color:var(--tx);font-family:'Noto Sans KR',sans-serif;font-size:14px;line-height:1.6}
+body{min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+header{background:var(--g);padding:0 1.5rem;height:54px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(30,60,30,.18)}
+.lm{width:28px;height:28px;background:rgba(255,255,255,.18);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.lt{font-size:14px;font-weight:600;color:#fff}
+.ls{font-size:11px;color:rgba(255,255,255,.6);margin-left:3px}
+.sp{flex:1}
+.sync-status{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.75)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#7fff9a;flex-shrink:0}
+.sync-dot.syncing{background:#ffd97a;animation:blink .7s infinite}
+.sync-dot.error{background:#ff9a9a}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hbadge{font-size:10px;padding:2px 8px;border:1px solid rgba(255,255,255,.3);border-radius:999px;color:rgba(255,255,255,.8);font-family:'JetBrains Mono',monospace}
+
+/* ── SRL 현황 바 ── */
+.srl-bar{background:var(--bg2);border-bottom:1px solid var(--br);padding:8px 1.5rem;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.srl-item{display:flex;align-items:center;gap:7px}
+.srl-label{font-size:11px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.srl-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--g)}
+.srl-val.tour{color:var(--pur)}
+.srl-val.reg{color:var(--teal)}
+.srl-divider{width:1px;height:20px;background:var(--br2)}
+.srl-updated{font-size:10px;color:var(--tx3);margin-left:auto}
+
+/* ── Layout ── */
+main{flex:1;display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 100px)}
+aside{background:var(--bg2);border-right:1px solid var(--br);padding:1.1rem;overflow-y:auto}
+.content{padding:1.25rem 1.5rem;overflow-y:auto;background:var(--bg)}
+
+/* ── Section / Tabs ── */
+.sec{margin-bottom:1.1rem}
+.slbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:.6rem;display:flex;align-items:center;gap:5px}
+.slbl::after{content:'';flex:1;height:1px;background:var(--br)}
+.stabs{display:grid;background:var(--bg3);border:1px solid var(--br);border-radius:var(--r);padding:3px;margin-bottom:.9rem}
+.stabs.c2{grid-template-columns:1fr 1fr}
+.stab{padding:6px 2px;border:none;background:transparent;border-radius:7px;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px;font-family:'Noto Sans KR',sans-serif}
+.stab svg{width:12px;height:12px;flex-shrink:0}
+.stab.on{background:var(--surf);color:var(--g);box-shadow:var(--sh);font-weight:600}
+.stab:not(.on):hover{color:var(--tx);background:rgba(255,255,255,.4)}
+
+/* ── Fields ── */
+.f{margin-bottom:9px}
+.f label{display:block;font-size:11px;font-weight:600;color:var(--tx2);margin-bottom:3px}
+.f input,.f select{width:100%;background:var(--surf);border:1px solid var(--br2);border-radius:var(--rs);padding:6px 8px;font-size:12px;color:var(--tx);font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s,box-shadow .15s}
+.f input:focus,.f select:focus{border-color:var(--g2);box-shadow:0 0 0 2px var(--gdim)}
+.f input::placeholder{color:var(--tx3);font-family:'Noto Sans KR',sans-serif;font-size:11px}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.hint{font-size:10px;color:var(--g2);margin-top:2px}
+.ichip{font-size:11px;color:var(--tx2);background:var(--gbg);border:1px solid var(--gdim);border-radius:var(--rs);padding:5px 9px;margin-bottom:9px;line-height:1.6}
+.ichip strong{color:var(--g)}
+
+/* ── Upload zone ── */
+.upzone{border:1.5px dashed var(--br2);border-radius:var(--r);padding:14px 10px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:7px;position:relative}
+.upzone:hover,.upzone.drag{border-color:var(--g2);background:var(--gbg)}
+.upzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upzone .ut{font-size:12px;font-weight:500;color:var(--tx);margin-bottom:2px}
+.upzone .us{font-size:10px;color:var(--tx3)}
+.fchip{display:flex;align-items:center;gap:6px;background:var(--gbg);border:1px solid var(--gdim);border-radius:var(--rs);padding:6px 8px;margin-bottom:7px}
+.fchip svg{color:var(--g);flex-shrink:0;width:12px;height:12px}
+.fcn{font-size:11px;color:var(--g);font-family:'JetBrains Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcr{font-size:10px;color:var(--tx3);white-space:nowrap}
+.fcd{background:transparent;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:0;line-height:1}
+.fcd:hover{color:var(--red)}
+.pinfo{background:var(--surf2);border:1px solid var(--br);border-radius:var(--rs);padding:6px 8px;font-size:10px;color:var(--tx2);margin-bottom:9px;line-height:1.8}
+.pinfo span{color:var(--g);font-weight:600;font-family:'JetBrains Mono',monospace}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:5px;border:none;border-radius:var(--rs);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;font-family:'Noto Sans KR',sans-serif;white-space:nowrap}
+.btn svg{width:12px;height:12px;flex-shrink:0}
+.bg{background:transparent;border:1px solid var(--br2);color:var(--tx2)}
+.bg:hover{background:var(--bg3);color:var(--tx)}
+.bgr{background:var(--g);color:#fff}
+.bgr:hover{background:var(--teal)}
+.bgo{background:transparent;border:1px solid var(--gdim);color:var(--g)}
+.bgo:hover{background:var(--gbg)}
+.bred{background:var(--rdim);border:1px solid #e0a0a0;color:var(--red)}
+.bred:hover{background:#f0c0c0}
+.bprim{width:100%;margin-top:9px;padding:9px;font-size:13px;font-weight:600;background:var(--g);color:#fff;border:none;border-radius:var(--r);cursor:pointer;font-family:'Noto Sans KR',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s}
+.bprim:hover{background:var(--teal)}
+.bprim svg{width:14px;height:14px}
+.btn:disabled,.bprim:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Content ── */
+.chdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.1rem;gap:8px}
+.ctitle{font-size:16px;font-weight:600}
+.csub{font-size:12px;color:var(--tx2);margin-top:1px}
+.hacts{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── Stats ── */
+.sbar{display:flex;gap:9px;margin-bottom:1.1rem;flex-wrap:wrap}
+.sc{background:var(--surf);border:1px solid var(--br);border-radius:var(--r);padding:10px 13px;flex:1;min-width:60px;box-shadow:var(--sh)}
+.slb{font-size:10px;color:var(--tx3);margin-bottom:2px;font-weight:500}
+.sv{font-size:19px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.vg{color:var(--g)}.vt{color:var(--teal)}.va{color:var(--amb)}.vp{color:var(--pur)}
+
+/* ── Preview table ── */
+.tw{background:var(--surf);border:1px solid var(--br);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+.ts{overflow-x:auto}
+table.pv{width:100%;border-collapse:collapse;font-size:11px}
+table.pv thead th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);white-space:nowrap;border-bottom:1px solid var(--br)}
+table.pv tbody tr{border-bottom:1px solid var(--br);transition:background .1s}
+table.pv tbody tr:last-child{border-bottom:none}
+table.pv tbody tr:hover{background:var(--surf2)}
+table.pv tbody tr.rnew{background:var(--gbg)}
+table.pv tbody tr.rex td{opacity:.45}
+tr.divr td{background:var(--gdim);color:var(--g);font-size:9px;font-weight:700;letter-spacing:.08em;padding:4px 10px;border-top:1px solid rgba(61,122,79,.2);border-bottom:1px solid rgba(61,122,79,.2)}
+td{padding:7px 10px;white-space:nowrap;color:var(--tx2);font-family:'JetBrains Mono',monospace;font-size:10px}
+td.cs{color:var(--g);font-weight:600}
+td.cse{color:var(--tx3);font-weight:500}
+td.ct{color:var(--teal)}
+td.cst{color:var(--amb)}
+td.cd{color:var(--tx)}
+td.cf{color:var(--tx3)}
+
+/* ── Bulk panel ── */
+.bpanel{background:var(--surf);border:1px solid var(--br);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+.btbar{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--bg2);border-bottom:1px solid var(--br);flex-wrap:wrap}
+.bttitle{font-size:13px;font-weight:600;color:var(--tx);flex:1}
+.bdbar{display:flex;align-items:center;gap:8px;padding:8px 13px;background:var(--gbg);border-bottom:1px solid var(--gdim);flex-wrap:wrap}
+.bdbar label{font-size:11px;font-weight:600;color:var(--tx2);white-space:nowrap}
+.bdbar .rng{font-size:12px;font-weight:600;color:var(--g);font-family:'JetBrains Mono',monospace}
+.bdbar .sp{flex:1}
+.bscroll{overflow-y:auto;max-height:calc(100vh - 370px);min-height:180px}
+.btable{width:100%;border-collapse:collapse;font-size:12px}
+.btable thead th{position:sticky;top:0;background:var(--bg3);padding:7px 9px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);white-space:nowrap;border-bottom:1px solid var(--br);z-index:2}
+.btable tbody tr{border-bottom:1px solid var(--br);transition:background .1s}
+.btable tbody tr:last-child{border-bottom:none}
+.btable tbody tr:hover{background:var(--surf2)}
+.btable td{padding:3px 5px;vertical-align:middle}
+.btable td.num{font-size:9px;color:var(--tx3);font-family:'JetBrains Mono',monospace;width:34px;text-align:center}
+.btable td input{width:100%;background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;font-size:11px;color:var(--tx);font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .1s,background .1s}
+.btable td input:focus{border-color:var(--g2);background:var(--surf);box-shadow:0 0 0 2px var(--gdim)}
+.btable td input::placeholder{color:var(--tx3);font-size:10px}
+.btable td.stc{width:26px;text-align:center;font-size:12px}
+.btable tbody tr.rfill{background:rgba(61,122,79,.04)}
+.btable tbody tr.rfill td.num{color:var(--g);font-weight:600}
+.bfoot{display:flex;align-items:center;gap:7px;padding:7px 13px;background:var(--bg2);border-top:1px solid var(--br);font-size:11px;color:var(--tx3);flex-wrap:wrap}
+.bcnt{color:var(--g);font-weight:600;font-family:'JetBrains Mono',monospace}
+
+/* ── Template list ── */
+.tpl-item{display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--br);border-radius:var(--rs);margin-bottom:7px;background:var(--surf2);transition:border-color .1s}
+.tpl-item:hover{border-color:var(--gdim)}
+.tpl-info{flex:1;min-width:0}
+.tpl-name{font-size:13px;font-weight:600;color:var(--tx)}
+.tpl-meta{font-size:10px;color:var(--tx3);margin-top:1px}
+.tpl-actions{display:flex;gap:5px;flex-shrink:0}
+
+/* ── Empty ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:280px;color:var(--tx3);gap:9px}
+.eico{width:48px;height:48px;background:var(--bg3);border:1px solid var(--br);border-radius:12px;display:flex;align-items:center;justify-content:center}
+.eico svg{width:20px;height:20px}
+.etxt{font-size:13px;font-weight:500;color:var(--tx2)}
+.esub{font-size:11px}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem}
+.modal{background:var(--surf);border:1px solid var(--br2);border-radius:var(--r);padding:1.25rem;width:420px;max-width:100%;box-shadow:0 8px 32px rgba(0,0,0,.18);max-height:90vh;display:flex;flex-direction:column}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:1rem;color:var(--tx);flex-shrink:0}
+.modal-body{overflow-y:auto;flex:1}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;flex-shrink:0}
+
+/* ── Setup banner ── */
+.setup-banner{background:var(--adim);border:1px solid #d4b86a;border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--amb);line-height:1.6;display:flex;gap:10px;align-items:flex-start}
+.setup-banner svg{width:16px;height:16px;flex-shrink:0;margin-top:2px}
+.setup-banner a{color:var(--g);font-weight:600}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--br2);border-radius:99px}
+
+@media(max-width:900px){
+  main{grid-template-columns:1fr}
+  aside{border-right:none;border-bottom:1px solid var(--br)}
+  .content{padding:1rem}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="lm">S</div>
+  <span class="lt">Schedule Generator</span>
+  <span class="ls">스케줄 자동 생성기</span>
+  <div class="sp"></div>
+  <div class="sync-status" id="sync-status" style="display:none">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-txt"></span>
+  </div>
+  <span class="hbadge">v3.0 · Shared</span>
+</header>
+
+<!-- SRL 현황 바 -->
+<div class="srl-bar">
+  <div class="srl-item">
+    <span class="srl-label">대회 마지막 SRL</span>
+    <span class="srl-val tour" id="srl-tour-last">로딩중...</span>
+  </div>
+  <div class="srl-divider"></div>
+  <div class="srl-item">
+    <span class="srl-label">정기 마지막 SRL</span>
+    <span class="srl-val reg" id="srl-reg-last">로딩중...</span>
+  </div>
+  <div class="srl-divider"></div>
+  <div class="srl-item">
+    <span class="srl-label">대회 다음 SRL</span>
+    <span class="srl-val tour" id="srl-tour-next" style="opacity:.6">—</span>
+  </div>
+  <div class="srl-divider"></div>
+  <div class="srl-item">
+    <span class="srl-label">정기 다음 SRL</span>
+    <span class="srl-val reg" id="srl-reg-next" style="opacity:.6">—</span>
+  </div>
+  <span class="srl-updated" id="srl-updated"></span>
+</div>
+
+<main>
+<!-- ── SIDEBAR ── -->
+<aside>
+
+  <div class="sec">
+    <div class="slbl">출력 모드</div>
+    <div class="stabs c2">
+      <button class="stab on" id="tm-new" onclick="setMode('new')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>신규 생성
+      </button>
+      <button class="stab" id="tm-app" onclick="setMode('append')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>이어 붙이기
+      </button>
+    </div>
+  </div>
+
+  <div id="upload-sec" style="display:none">
+    <div class="sec">
+      <div class="slbl">기존 엑셀 업로드</div>
+      <div class="upzone" id="upzone">
+        <input type="file" accept=".xlsx,.xls" id="file-inp" onchange="onFileChange(event)"/>
+        <div style="color:var(--g);margin-bottom:5px"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5-5 5 5m-5-5v12"/></svg></div>
+        <div class="ut">드래그하거나 클릭하여 업로드</div>
+        <div class="us">.xlsx / .xls</div>
+      </div>
+      <div id="fchip" style="display:none" class="fchip">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="fcn" id="chip-name"></span>
+        <span class="fcr" id="chip-rows"></span>
+        <button class="fcd" onclick="clearUpload()">×</button>
+      </div>
+      <div id="pinfo" style="display:none" class="pinfo"></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="slbl">스케줄 유형</div>
+    <div class="stabs c2">
+      <button class="stab on" id="tt-t" onclick="setType('tournament')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 010-5H6m12 5h1.5a2.5 2.5 0 000-5H18M9 3h6v11a3 3 0 01-6 0V3zM9 21h6m-3-4v4"/></svg>대회
+      </button>
+      <button class="stab" id="tt-r" onclick="setType('regular')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>정기
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="slbl">기본 설정</div>
+    <div class="f">
+      <label>시작 SRL 번호</label>
+      <input type="number" id="srl-start" value="20001"/>
+      <div class="hint" id="srl-hint"></div>
+    </div>
+    <div class="f"><label>VersionId (빌드 버전)</label><input type="text" id="ver-id" placeholder="예: 1.2.3"/></div>
+    <div class="f"><label>RegDate (입력 날짜)</label><input type="date" id="reg-date"/></div>
+  </div>
+
+  <!-- 대회 설정 -->
+  <div id="sec-t">
+    <div class="sec">
+      <div class="slbl">대회 설정</div>
+      <div class="ichip">SRL <strong>20000번대</strong> · StartDate 기준 자동 계산</div>
+      <div class="f"><label>TnmtId</label><input type="text" id="tnmt-id" placeholder="토너먼트 ID"/></div>
+      <div class="fr2">
+        <div class="f"><label>시작 날짜</label><input type="date" id="d-from"/></div>
+        <div class="f"><label>종료 날짜</label><input type="date" id="d-to"/></div>
+      </div>
+      <div class="f"><label>시작 시간</label><input type="time" id="s-time" value="19:00"/></div>
+    </div>
+  </div>
+
+  <!-- 정기 설정 -->
+  <div id="sec-r" style="display:none">
+    <div class="sec">
+      <div class="slbl">정기 설정</div>
+      <div class="ichip">SRL <strong>100000번대</strong> · 시작·종료 시간 기준으로 템플릿 필터링</div>
+      <div class="fr2">
+        <div class="f"><label>시작 날짜</label><input type="date" id="r-from-d"/></div>
+        <div class="f"><label>시작 시간</label><input type="time" id="r-from-t" value="00:00"/></div>
+      </div>
+      <div class="fr2">
+        <div class="f"><label>종료 날짜</label><input type="date" id="r-to-d"/></div>
+        <div class="f"><label>종료 시간</label><input type="time" id="r-to-t" value="23:59"/></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="bprim" onclick="generate()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 017 7h2m6 0h2a5 5 0 010 10h-2m-7-5h8"/></svg>
+    미리보기 생성
+  </button>
+
+</aside>
+
+<!-- ── CONTENT ── -->
+<div class="content">
+
+  <!-- Preview -->
+  <div id="view-prev">
+    <div class="chdr">
+      <div><div class="ctitle">스케줄 데이터</div><div class="csub" id="csub">좌측 설정 후 미리보기를 생성하세요</div></div>
+      <div class="hacts">
+        <button class="btn bgr" id="btn-dl" onclick="downloadExcel()" disabled>
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>
+          <span id="dl-lbl">엑셀 다운로드</span>
+        </button>
+      </div>
+    </div>
+    <div class="sbar" id="sbar" style="display:none">
+      <div class="sc"><div class="slb">기존 행</div><div class="sv vt" id="s-exist">—</div></div>
+      <div class="sc"><div class="slb">신규 행</div><div class="sv vg" id="s-new">0</div></div>
+      <div class="sc"><div class="slb">총 합계</div><div class="sv vp" id="s-total">0</div></div>
+      <div class="sc"><div class="slb">SRL 범위</div><div class="sv va" id="s-srl">—</div></div>
+    </div>
+    <div id="tarea">
+      <div class="empty">
+        <div class="eico"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18m-9 4h.01M12 16h.01M8 14h.01M8 16h.01M16 14h.01"/></svg></div>
+        <div class="etxt">스케줄 데이터 없음</div>
+        <div class="esub">좌측 설정 완료 후 미리보기 생성을 클릭하세요</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk -->
+  <div id="view-bulk" style="display:none">
+    <div class="bpanel">
+      <div class="btbar">
+        <span class="bttitle">정기 스케줄 일괄 입력</span>
+        <button class="btn bg" onclick="clearAllBulk()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>초기화
+        </button>
+        <button class="btn bgo" onclick="openLoadModal()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>공유 템플릿 불러오기
+        </button>
+        <button class="btn bgr" onclick="openSaveModal()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>템플릿 공유 저장
+        </button>
+        <button class="btn bg" onclick="exportCSV()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>CSV 내보내기
+        </button>
+        <input type="file" id="csv-inp" accept=".csv,.xlsx" style="display:none" onchange="onCSV(event)"/>
+        <button class="btn bg" onclick="document.getElementById('csv-inp').click()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5-5 5 5m-5-5v12"/></svg>CSV 불러오기
+        </button>
+      </div>
+
+      <div class="bdbar">
+        <span style="font-size:11px;color:var(--tx2);font-weight:600">적용 범위:</span>
+        <span class="rng" id="range-summary">좌측에서 날짜를 설정하세요</span>
+        <div class="sp"></div>
+        <span style="font-size:10px;color:var(--tx3)">날짜는 좌측 설정 · 시간만 행마다 입력</span>
+      </div>
+
+      <div class="bscroll">
+        <table class="btable">
+          <thead><tr><th>#</th><th>TnmtId</th><th>시작 시간 (HH:MM)</th><th>✓</th></tr></thead>
+          <tbody id="bulk-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="bfoot">
+        입력 완료:&nbsp;<span class="bcnt" id="bfill">0</span>&nbsp;/ 126행
+        &nbsp;·&nbsp;
+        <button class="btn bgr" style="margin-left:auto" onclick="generate()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 017 7h2m6 0h2a5 5 0 010 10h-2m-7-5h8"/></svg>미리보기 생성
+        </button>
+        &nbsp;
+        <button class="btn bgo" id="bulk-dl" onclick="downloadExcel()" disabled>
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>엑셀 다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<!-- 저장 모달 -->
+<div class="overlay" id="modal-save" style="display:none" onclick="if(event.target===this)closeModal('save')">
+  <div class="modal">
+    <h3>공유 템플릿으로 저장</h3>
+    <div class="f"><label>템플릿 이름</label><input type="text" id="save-name" placeholder="예: 5월 정기 리그" maxlength="40"/></div>
+    <div class="f"><label>메모 (선택)</label><input type="text" id="save-memo" placeholder="간단한 설명" maxlength="60"/></div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:4px;line-height:1.6">이 페이지 URL을 아는 모든 팀원이 불러올 수 있습니다.</div>
+    <div class="modal-actions">
+      <button class="btn bg" onclick="closeModal('save')">취소</button>
+      <button class="btn bgr" onclick="saveTemplate()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 불러오기 모달 -->
+<div class="overlay" id="modal-load" style="display:none" onclick="if(event.target===this)closeModal('load')">
+  <div class="modal" style="width:480px">
+    <h3>공유 템플릿 불러오기</h3>
+    <div class="modal-body" id="tpl-list" style="min-height:120px"></div>
+    <div class="modal-actions">
+      <button class="btn bg" onclick="closeModal('load')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══ CONFIG — 여기만 수정하면 됩니다 ═══
+   GitHub Gist 설정 (config.js 에도 동일하게 있음)
+   GIST_ID   : 공유 Gist ID (README 참고)
+   GH_TOKEN  : Gist 쓰기 권한 Personal Access Token
+   ※ 토큰은 gist scope만 있으면 됩니다
+════════════════════════════════════════ */
+const CFG = window.SCHEDULE_CONFIG || {
+  GIST_ID:  'YOUR_GIST_ID_HERE',
+  GH_TOKEN: 'YOUR_GITHUB_TOKEN_HERE',
+};
+
+const API = 'https://api.github.com/gists/' + CFG.GIST_ID;
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'Authorization': 'token ' + CFG.GH_TOKEN,
+};
+
+const COLS=['TnmtScheduleSrl','VersionId','TnmtId','DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate','IsDeleted','DeletedDate'];
+const BULK_N = 126;
+
+let mode = 'new', type = 'tournament';
+let newRows = [], uploadedWb = null, uploadedSheet = '', existRows = [], existHdr = [];
+
+/* ─── Sync UI ─── */
+function setSync(state, msg) {
+  const wrap = document.getElementById('sync-status');
+  const dot  = document.getElementById('sync-dot');
+  const txt  = document.getElementById('sync-txt');
+  if (!state) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  dot.className = 'sync-dot' + (state === 'syncing' ? ' syncing' : state === 'error' ? ' error' : '');
+  txt.textContent = msg;
+  if (state === 'ok') setTimeout(() => setSync(null), 3000);
+}
+
+/* ─── Gist read/write ─── */
+async function gistRead() {
+  try {
+    const r = await fetch(API, { headers: HEADERS });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const raw = data.files['schedule_data.json']?.content;
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+async function gistWrite(payload) {
+  return fetch(API, {
+    method: 'PATCH',
+    headers: HEADERS,
+    body: JSON.stringify({ files: { 'schedule_data.json': { content: JSON.stringify(payload, null, 2) } } }),
+  });
+}
+
+function emptyStore() {
+  return { srl: { tournament: { last: null, updatedAt: null }, regular: { last: null, updatedAt: null } }, templates: [] };
+}
+
+/* ─── SRL 현황 로드 ─── */
+async function loadSRLBar() {
+  if (CFG.GIST_ID === 'YOUR_GIST_ID_HERE') {
+    ['srl-tour-last','srl-reg-last','srl-tour-next','srl-reg-next'].forEach(id => {
+      document.getElementById(id).textContent = '미설정';
+    });
+    document.getElementById('srl-updated').textContent = '⚙ config.js 설정 필요';
+    return;
+  }
+  setSync('syncing', 'SRL 현황 로딩 중...');
+  const store = await gistRead();
+  setSync(null);
+  if (!store) { setSync('error', 'Gist 연결 실패'); return; }
+  const t = store.srl?.tournament;
+  const re = store.srl?.regular;
+  document.getElementById('srl-tour-last').textContent = t?.last ?? '—';
+  document.getElementById('srl-reg-last').textContent  = re?.last ?? '—';
+  document.getElementById('srl-tour-next').textContent = t?.last ? t.last + 1 : '—';
+  document.getElementById('srl-reg-next').textContent  = re?.last ? re.last + 1 : '—';
+  // 자동 세팅
+  if (type === 'tournament' && t?.last) document.getElementById('srl-start').value = t.last + 1;
+  if (type === 'regular'    && re?.last) document.getElementById('srl-start').value = re.last + 1;
+  const latest = [t?.updatedAt, re?.updatedAt].filter(Boolean).sort().pop();
+  document.getElementById('srl-updated').textContent = latest ? '마지막 갱신: ' + latest.slice(0,16).replace('T',' ') : '';
+}
+
+async function saveSRLAfterGenerate() {
+  if (CFG.GIST_ID === 'YOUR_GIST_ID_HERE' || !newRows.length) return;
+  const lastSrl = newRows[newRows.length - 1].TnmtScheduleSrl;
+  setSync('syncing', 'SRL 기록 중...');
+  const store = (await gistRead()) || emptyStore();
+  store.srl[type].last = lastSrl;
+  store.srl[type].updatedAt = new Date().toISOString();
+  const r = await gistWrite(store);
+  if (r.ok) { setSync('ok', 'SRL 저장됨'); loadSRLBar(); }
+  else       setSync('error', 'SRL 저장 실패');
+}
+
+/* ─── Mode / Type ─── */
+function setMode(m) {
+  mode = m;
+  document.getElementById('tm-new').classList.toggle('on', m === 'new');
+  document.getElementById('tm-app').classList.toggle('on', m === 'append');
+  document.getElementById('upload-sec').style.display = m === 'append' ? '' : 'none';
+  document.getElementById('dl-lbl').textContent = m === 'append' ? '이어붙여 다운로드' : '엑셀 다운로드';
+  if (m === 'new') clearUpload();
+}
+
+function setType(t) {
+  type = t;
+  document.getElementById('tt-t').classList.toggle('on', t === 'tournament');
+  document.getElementById('tt-r').classList.toggle('on', t === 'regular');
+  document.getElementById('sec-t').style.display = t === 'tournament' ? '' : 'none';
+  document.getElementById('sec-r').style.display = t === 'regular'    ? '' : 'none';
+  document.getElementById('view-prev').style.display = t === 'regular' ? 'none' : '';
+  document.getElementById('view-bulk').style.display = t === 'regular' ? ''     : 'none';
+  // SRL 자동 세팅
+  const tourLast = parseInt(document.getElementById('srl-tour-last').textContent);
+  const regLast  = parseInt(document.getElementById('srl-reg-last').textContent);
+  if (t === 'tournament') document.getElementById('srl-start').value = isNaN(tourLast) ? 20001 : tourLast + 1;
+  else                    document.getElementById('srl-start').value = isNaN(regLast)  ? 100001 : regLast  + 1;
+  if (t === 'regular') updateRangeSummary();
+}
+
+/* ─── Range summary ─── */
+function updateRangeSummary() {
+  const df = document.getElementById('r-from-d').value;
+  const tf = document.getElementById('r-from-t').value;
+  const dt = document.getElementById('r-to-d').value;
+  const tt = document.getElementById('r-to-t').value;
+  const el = document.getElementById('range-summary');
+  el.textContent = (df && dt) ? `${df} ${tf||'00:00'} ~ ${dt} ${tt||'23:59'}` : '좌측에서 날짜를 설정하세요';
+}
+
+/* ─── Bulk table ─── */
+function initBulk() {
+  const tb = document.getElementById('bulk-tbody'); tb.innerHTML = '';
+  for (let i = 1; i <= BULK_N; i++) {
+    const tr = document.createElement('tr'); tr.id = 'br-' + i;
+    tr.innerHTML = `<td class="num">${String(i).padStart(3,'0')}</td><td><input type="text" id="bt-${i}" placeholder="TnmtId" oninput="updRow(${i})"/></td><td><input type="time" id="bm-${i}" oninput="updRow(${i})"/></td><td class="stc" id="bs-${i}" style="color:var(--tx3)">·</td>`;
+    tb.appendChild(tr);
+  }
+  updCount();
+}
+function updRow(i) {
+  const t = document.getElementById('bt-'+i).value.trim();
+  const m = document.getElementById('bm-'+i).value;
+  const ok = t !== '' && m !== '';
+  document.getElementById('br-'+i).classList.toggle('rfill', ok);
+  const s = document.getElementById('bs-'+i);
+  s.textContent = ok ? '✓' : '·'; s.style.color = ok ? 'var(--g)' : 'var(--tx3)';
+  updCount();
+}
+function updCount() {
+  let n = 0;
+  for (let i = 1; i <= BULK_N; i++) {
+    if (document.getElementById('bt-'+i)?.value.trim() && document.getElementById('bm-'+i)?.value) n++;
+  }
+  document.getElementById('bfill').textContent = n;
+}
+function clearAllBulk() {
+  if (!confirm('입력된 내용을 모두 초기화할까요?')) return;
+  for (let i = 1; i <= BULK_N; i++) {
+    document.getElementById('bt-'+i).value = '';
+    document.getElementById('bm-'+i).value = '';
+    updRow(i);
+  }
+}
+function fillBulk(rows) {
+  for (let i = 0; i < BULK_N; i++) {
+    const n = i + 1;
+    document.getElementById('bt-'+n).value = rows[i] ? (rows[i].t || rows[i].tnmt_id || '') : '';
+    document.getElementById('bm-'+n).value = rows[i] ? (rows[i].m || rows[i].start_time || '') : '';
+    updRow(n);
+  }
+}
+
+/* ─── File upload ─── */
+function onFileChange(e) { const f = e.target.files[0]; if (f) readXL(f); }
+const uz = document.getElementById('upzone');
+uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('drag'); });
+uz.addEventListener('dragleave', () => uz.classList.remove('drag'));
+uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f) readXL(f); });
+function readXL(file) {
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try {
+      uploadedWb = XLSX.read(ev.target.result, { type: 'binary' });
+      uploadedSheet = uploadedWb.SheetNames[0];
+      const data = XLSX.utils.sheet_to_json(uploadedWb.Sheets[uploadedSheet], { header: 1, defval: '' });
+      existHdr = data[0].map(String);
+      existRows = data.slice(1).filter(r => r.some(v => v !== ''));
+      const si = existHdr.findIndex(h => h.toLowerCase().includes('srl'));
+      let ns = null;
+      if (si >= 0) { const v = existRows.map(r => parseInt(r[si])).filter(v => !isNaN(v)); if (v.length) ns = Math.max(...v) + 1; }
+      if (ns) { document.getElementById('srl-start').value = ns; document.getElementById('srl-hint').textContent = '↑ 파일에서 자동 감지됨'; }
+      document.getElementById('fchip').style.display = 'flex';
+      document.getElementById('chip-name').textContent = file.name;
+      document.getElementById('chip-rows').textContent = existRows.length + '행';
+      const pi = document.getElementById('pinfo'); pi.style.display = 'block';
+      pi.innerHTML = `시트: <span>${uploadedSheet}</span> &nbsp; 기존: <span>${existRows.length}행</span> &nbsp; 다음 SRL: <span>${ns ?? '미감지'}</span>`;
+    } catch(err) { alert('파일 읽기 실패: ' + err.message); }
+  };
+  rd.readAsBinaryString(file);
+}
+function clearUpload() {
+  uploadedWb = null; uploadedSheet = ''; existRows = []; existHdr = [];
+  document.getElementById('fchip').style.display = 'none';
+  document.getElementById('pinfo').style.display = 'none';
+  document.getElementById('file-inp').value = '';
+  document.getElementById('srl-hint').textContent = '';
+}
+
+/* ─── CSV ─── */
+function exportCSV() {
+  const lines = ['TnmtId,StartTime'];
+  for (let i = 1; i <= BULK_N; i++) {
+    lines.push(`${document.getElementById('bt-'+i).value.trim()},${document.getElementById('bm-'+i).value}`);
+  }
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `regular_template_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+function onCSV(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try {
+      let rows = [];
+      if (file.name.endsWith('.csv')) {
+        const lines = ev.target.result.split('\n');
+        const hdr = lines[0].split(',').map(s => s.trim().replace(/^"|"$/g,''));
+        const ti = hdr.findIndex(h => h.toLowerCase().includes('tnmt') || h.toLowerCase().includes('id'));
+        const mi = hdr.findIndex(h => h.toLowerCase().includes('time') || h.toLowerCase().includes('시간'));
+        for (let i = 1; i < lines.length && rows.length < BULK_N; i++) {
+          const c = lines[i].split(',').map(s => s.trim().replace(/^"|"$/g,''));
+          if (!c[ti]) continue;
+          rows.push({ t: c[ti]||'', m: c[mi >= 0 ? mi : 1]||'' });
+        }
+      } else {
+        const wb2 = XLSX.read(ev.target.result, { type: 'binary', cellDates: false });
+        const ws = wb2.Sheets[wb2.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+        const hdr = (data[0]||[]).map(String).map(s => s.toLowerCase());
+        const ti = hdr.findIndex(h => h.includes('tnmt') || h.includes('id'));
+        const mi = hdr.findIndex(h => h.includes('time') || h.includes('시간') || h.includes('start'));
+        for (let i = 1; i < data.length && rows.length < BULK_N; i++) {
+          const r = data[i]; if (!r[ti]) continue;
+          rows.push({ t: String(r[ti]||''), m: parseTimeToHHMM(r[mi >= 0 ? mi : 1]) });
+        }
+      }
+      fillBulk(rows);
+      alert(rows.length + '개 행을 불러왔습니다.');
+    } catch(err) { alert('파일 읽기 실패: ' + err.message); }
+  };
+  if (file.name.endsWith('.csv')) rd.readAsText(file, 'UTF-8'); else rd.readAsBinaryString(file);
+  e.target.value = '';
+}
+
+function parseTimeToHHMM(val) {
+  if (val === null || val === undefined || val === '') return '';
+  if (typeof val === 'number') {
+    const tot = Math.round(val * 24 * 60);
+    return pad(Math.floor(tot/60)%24) + ':' + pad(tot%60);
+  }
+  const s = String(val).trim();
+  const ap = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  if (ap) {
+    let h = parseInt(ap[1]); const m = parseInt(ap[2]); const a = ap[3].toUpperCase();
+    if (a === 'AM' && h === 12) h = 0;
+    if (a === 'PM' && h !== 12) h += 12;
+    return pad(h) + ':' + pad(m);
+  }
+  const hm = s.match(/^(\d{1,2}):(\d{2})/);
+  if (hm) return pad(parseInt(hm[1])) + ':' + pad(parseInt(hm[2]));
+  const co = s.replace(/[^0-9]/g,'');
+  if (co.length === 4) return co.slice(0,2) + ':' + co.slice(2);
+  return '';
+}
+
+/* ─── Date format ─── */
+function pad(n) { return String(n).padStart(2,'0'); }
+function fmtDate(d) {
+  const h24 = d.getHours(), mi = pad(d.getMinutes()), sc = pad(d.getSeconds());
+  const ampm = h24 >= 12 ? 'PM' : 'AM', h12 = h24 % 12 || 12;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${h12}:${mi}:${sc} ${ampm}`;
+}
+
+/* ─── Build rows ─── */
+function buildRows() {
+  const srl0 = parseInt(document.getElementById('srl-start').value) || (type === 'regular' ? 100001 : 20001);
+  const ver  = document.getElementById('ver-id').value || '';
+  const rv   = document.getElementById('reg-date').value;
+  const reg  = rv ? fmtDate(new Date(rv+'T12:00:00')) : '';
+  const rows = []; let srl = srl0;
+
+  if (type === 'tournament') {
+    const tid = document.getElementById('tnmt-id').value || '';
+    const fv  = document.getElementById('d-from').value;
+    const tv  = document.getElementById('d-to').value;
+    const tm  = document.getElementById('s-time').value || '19:00';
+    if (!fv || !tv) return [];
+    const [th, tmm] = tm.split(':').map(Number);
+    for (let d = new Date(fv+'T00:00:00'); d <= new Date(tv+'T00:00:00'); d.setDate(d.getDate()+1)) {
+      const s = new Date(d); s.setHours(th, tmm, 0, 0);
+      const dp = new Date(s); dp.setHours(2,0,0,0);
+      const cr = new Date(s); cr.setHours(2,0,0,0);
+      rows.push(mkRow(srl++, ver, tid, dp, cr, new Date(s.getTime()-5*60000), new Date(s.getTime()-5*60000), s, reg));
+    }
+  } else {
+    const df = document.getElementById('r-from-d').value;
+    const tf = document.getElementById('r-from-t').value || '00:00';
+    const dt = document.getElementById('r-to-d').value;
+    const tt = document.getElementById('r-to-t').value || '23:59';
+    if (!df || !dt) return [];
+    const tpl = [];
+    for (let i = 1; i <= BULK_N; i++) {
+      const tid = document.getElementById('bt-'+i).value.trim();
+      const tm  = document.getElementById('bm-'+i).value;
+      if (!tid || !tm) continue;
+      const [th, tmm] = tm.split(':').map(Number);
+      tpl.push({ tid, th, tmm, tot: th*60+tmm });
+    }
+    if (!tpl.length) return [];
+    const [ffH, ffM] = tf.split(':').map(Number);
+    const [ttH, ttM] = tt.split(':').map(Number);
+    const fromMin = ffH*60+ffM, toMin = ttH*60+ttM;
+    const from = new Date(df+'T00:00:00'), to = new Date(dt+'T00:00:00');
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
+      const isFirst = d.toDateString() === from.toDateString();
+      const isLast  = d.toDateString() === to.toDateString();
+      for (const item of tpl) {
+        if (isFirst && item.tot < fromMin) continue;
+        if (isLast  && item.tot > toMin)   continue;
+        const s = new Date(d); s.setHours(item.th, item.tmm, 0, 0);
+        rows.push(mkRow(srl++, ver, item.tid,
+          new Date(s.getTime()-48*3600000), new Date(s.getTime()-24*3600000),
+          new Date(s.getTime()-5*60000), new Date(s.getTime()-3*60000), s, reg));
+      }
+    }
+  }
+  return rows;
+}
+function mkRow(srl, ver, tid, dp, cr, pu, st, s, reg) {
+  return { TnmtScheduleSrl:srl, VersionId:ver, TnmtId:tid, DisplayDate:fmtDate(dp), CreateDate:fmtDate(cr), PushDate:fmtDate(pu), StandbyDate:fmtDate(st), StartDate:fmtDate(s), RegDate:reg, IsDeleted:'FALSE', DeletedDate:'' };
+}
+
+/* ─── Generate ─── */
+function generate() {
+  if (mode === 'append' && !uploadedWb) { alert('이어붙이기 모드에서는 먼저 엑셀 파일을 업로드해주세요.'); return; }
+  if (type === 'regular' && (!document.getElementById('r-from-d').value || !document.getElementById('r-to-d').value)) { alert('정기 스케줄의 시작/종료 날짜를 설정해주세요.'); return; }
+  newRows = buildRows();
+  if (!newRows.length) { alert('입력된 데이터가 없습니다.'); return; }
+  document.getElementById('bulk-dl').disabled = false;
+  document.getElementById('view-prev').style.display = '';
+  document.getElementById('view-bulk').style.display = 'none';
+  const ec = mode === 'append' ? existRows.length : 0;
+  const total = ec + newRows.length;
+  const sf = newRows[0].TnmtScheduleSrl, sl = newRows[newRows.length-1].TnmtScheduleSrl;
+  document.getElementById('sbar').style.display = 'flex';
+  document.getElementById('s-exist').textContent = mode === 'append' ? ec : '—';
+  document.getElementById('s-new').textContent   = newRows.length;
+  document.getElementById('s-total').textContent  = total;
+  document.getElementById('s-srl').textContent    = sf === sl ? sf : `${sf}–${sl}`;
+  document.getElementById('csub').textContent = mode === 'append'
+    ? `기존 ${ec}행 + 신규 ${newRows.length}행 = 총 ${total}행`
+    : `${newRows.length}개 행 생성됨 · ${type === 'tournament' ? '대회' : '정기'} 스케줄`;
+  function cc(col, isNew) {
+    if (col === 'TnmtScheduleSrl') return isNew ? 'cs' : 'cse';
+    if (col === 'TnmtId') return 'ct';
+    if (col === 'StartDate') return 'cst cd';
+    if (['DisplayDate','CreateDate','PushDate','StandbyDate','RegDate'].includes(col)) return 'cd';
+    return '';
+  }
+  let html = '<thead><tr>'+COLS.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  if (mode === 'append' && existRows.length) {
+    existRows.forEach(r => {
+      html += '<tr class="rex">'+COLS.map(c => { const idx=existHdr.indexOf(c); return `<td class="${cc(c,false)}">${idx>=0?(r[idx]??''):''}</td>`; }).join('')+'</tr>';
+    });
+    html += `<tr class="divr"><td colspan="${COLS.length}">▼ 신규 추가 — ${newRows.length}행</td></tr>`;
+  }
+  newRows.forEach(r => {
+    html += '<tr class="rnew">'+COLS.map(c => { const v=r[c]??''; return `<td class="${cc(c,true)}${v==='FALSE'?' cf':''}">${v}</td>`; }).join('')+'</tr>';
+  });
+  html += '</tbody>';
+  const back = type === 'regular' ? `<div style="margin-bottom:9px"><button class="btn bg" onclick="backBulk()"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>입력 테이블로 돌아가기</button></div>` : '';
+  document.getElementById('tarea').innerHTML = back + `<div class="tw"><div class="ts"><table class="pv">${html}</table></div></div>`;
+  document.getElementById('btn-dl').disabled = false;
+  // SRL 자동 기록
+  saveSRLAfterGenerate();
+}
+function backBulk() {
+  document.getElementById('view-prev').style.display = 'none';
+  document.getElementById('view-bulk').style.display = '';
+}
+
+/* ─── Download ─── */
+function downloadExcel() {
+  if (!newRows.length) return;
+  let wb, fname;
+  if (mode === 'append' && uploadedWb) {
+    wb = uploadedWb;
+    const ws = wb.Sheets[uploadedSheet];
+    const range = XLSX.utils.decode_range(ws['!ref']||'A1');
+    let lr = range.e.r;
+    const hm = {}; existHdr.forEach((h,i) => { hm[h]=i; });
+    newRows.forEach(row => { lr++; COLS.forEach(col => { const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col); ws[XLSX.utils.encode_cell({r:lr,c:ci})]={v:String(row[col]??''),t:'s'}; }); });
+    const nr = XLSX.utils.decode_range(ws['!ref']); nr.e.r=lr; nr.e.c=Math.max(nr.e.c,COLS.length-1); ws['!ref']=XLSX.utils.encode_range(nr);
+    fname = `${uploadedSheet.replace(/[^a-zA-Z0-9가-힣_-]/g,'_')}_append_${new Date().toISOString().slice(0,10)}.xlsx`;
+  } else {
+    wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([COLS, ...newRows.map(r=>COLS.map(c=>r[c]??''))]);
+    ws['!cols'] = COLS.map(c => ({ wch: c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16 }));
+    COLS.forEach((_,i) => { const cell=XLSX.utils.encode_cell({r:0,c:i}); if(ws[cell]) ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}}; });
+    XLSX.utils.book_append_sheet(wb, ws, 'TnmtSchedule');
+    fname = `schedule_${type}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  }
+  XLSX.writeFile(wb, fname);
+}
+
+/* ─── Shared Templates (Gist) ─── */
+function openSaveModal() {
+  let n = 0; for (let i=1;i<=BULK_N;i++) if (document.getElementById('bt-'+i).value.trim()) n++;
+  if (!n) { alert('저장할 TnmtId 데이터가 없습니다.'); return; }
+  document.getElementById('save-name').value = '';
+  document.getElementById('save-memo').value = '';
+  document.getElementById('modal-save').style.display = 'flex';
+  setTimeout(() => document.getElementById('save-name').focus(), 50);
+}
+function closeModal(k) { document.getElementById('modal-'+k).style.display = 'none'; }
+
+async function saveTemplate() {
+  const name = document.getElementById('save-name').value.trim();
+  if (!name) { alert('템플릿 이름을 입력해주세요.'); return; }
+  if (CFG.GIST_ID === 'YOUR_GIST_ID_HERE') { alert('config.js에 GIST_ID와 GH_TOKEN을 먼저 설정해주세요.'); return; }
+  const memo = document.getElementById('save-memo').value.trim();
+  const rows = [];
+  for (let i=1;i<=BULK_N;i++) rows.push({ tnmt_id: document.getElementById('bt-'+i).value.trim(), start_time: document.getElementById('bm-'+i).value });
+  const count = rows.filter(r=>r.tnmt_id).length;
+  setSync('syncing', '템플릿 저장 중...');
+  closeModal('save');
+  const store = (await gistRead()) || emptyStore();
+  store.templates = store.templates || [];
+  store.templates.push({ id: Date.now(), name, memo, rows, count, createdAt: new Date().toISOString() });
+  const r = await gistWrite(store);
+  if (r.ok) { setSync('ok', '템플릿 저장됨'); alert(`"${name}" 템플릿이 저장됐습니다!`); }
+  else       { setSync('error', '저장 실패'); alert('저장에 실패했습니다.'); }
+}
+
+async function openLoadModal() {
+  document.getElementById('modal-load').style.display = 'flex';
+  document.getElementById('tpl-list').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--tx3);font-size:12px">불러오는 중...</div>';
+  if (CFG.GIST_ID === 'YOUR_GIST_ID_HERE') {
+    document.getElementById('tpl-list').innerHTML = '<div style="padding:1rem;font-size:12px;color:var(--amb)">⚙ config.js에 GIST_ID를 먼저 설정해주세요.</div>';
+    return;
+  }
+  const store = await gistRead();
+  const tpls = store?.templates?.slice().reverse() || [];
+  if (!tpls.length) { document.getElementById('tpl-list').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--tx3);font-size:12px">저장된 공유 템플릿이 없습니다.</div>'; return; }
+  document.getElementById('tpl-list').innerHTML = tpls.map(t => {
+    const dt = new Date(t.createdAt).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    return `<div class="tpl-item">
+      <div class="tpl-info">
+        <div class="tpl-name">${t.name}</div>
+        <div class="tpl-meta">${t.memo ? t.memo+' · ' : ''}${t.count}개 TnmtId · ${dt}</div>
+      </div>
+      <div class="tpl-actions">
+        <button class="btn bgo" onclick="loadTemplate(${t.id})">불러오기</button>
+        <button class="btn bred" onclick="deleteTpl(${t.id},'${t.name.replace(/'/g,"\\'")}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadTemplate(id) {
+  const store = await gistRead();
+  const t = store?.templates?.find(x => x.id === id);
+  if (!t) { alert('템플릿을 찾을 수 없습니다.'); return; }
+  fillBulk(t.rows);
+  closeModal('load');
+  alert(`"${t.name}" 템플릿을 불러왔습니다.`);
+}
+
+async function deleteTpl(id, name) {
+  if (!confirm(`"${name}" 템플릿을 삭제할까요?`)) return;
+  setSync('syncing', '삭제 중...');
+  const store = (await gistRead()) || emptyStore();
+  store.templates = (store.templates || []).filter(t => t.id !== id);
+  const r = await gistWrite(store);
+  if (r.ok) { setSync('ok', '삭제됨'); openLoadModal(); }
+  else       setSync('error', '삭제 실패');
+}
+
+/* ─── Init ─── */
+(function() {
+  document.getElementById('reg-date').value = new Date().toISOString().slice(0,10);
+  initBulk();
+  ['r-from-d','r-from-t','r-to-d','r-to-t'].forEach(id => document.getElementById(id).addEventListener('input', updateRangeSummary));
+  loadSRLBar();
+})();
+</script>
+</body>
+</html>
