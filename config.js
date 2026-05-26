@@ -14,6 +14,6 @@ window.SCHEDULE_CONFIG = {
   //    - https://github.com/settings/tokens → Generate new token (classic)
   //    - 체크: gist ✓  (나머지 불필요)
   //    - 생성된 ghp_xxx... 값을 붙여넣기
-  GH_TOKEN: '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',
+  GH_TOKEN: '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',
 
 };
