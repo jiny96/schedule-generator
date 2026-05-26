@@ -695,7 +695,7 @@ function buildRows(){
   return rows;
 }
 function mkRow(srl,ver,tid,dp,cr,pu,st,s,reg){
-  return{TnmtScheduleSrl:srl,VersionId:ver,TnmtId:tid,DisplayDate:fmtDate(dp),CreateDate:fmtDate(cr),PushDate:fmtDate(pu),StandbyDate:fmtDate(st),StartDate:fmtDate(s),RegDate:reg,IsDeleted:'FALSE',DeletedDate:''};
+  return{TnmtScheduleSrl:srl,VersionId:ver!==''?Number(ver):ver,TnmtId:tid!==''?Number(tid):tid,DisplayDate:fmtDate(dp),CreateDate:fmtDate(cr),PushDate:fmtDate(pu),StandbyDate:fmtDate(st),StartDate:fmtDate(s),RegDate:reg,IsDeleted:'FALSE',DeletedDate:''};
 }
 
 /* ═══ Generate ═══ */
@@ -742,7 +742,7 @@ function downloadExcel(){
     wb=uploadedWb;const ws=wb.Sheets[uploadedSheet];
     const range=XLSX.utils.decode_range(ws['!ref']||'A1');let lr=range.e.r;
     const hm={};existHdr.forEach((h,i)=>{hm[h]=i;});
-    newRows.forEach(row=>{lr++;COLS.forEach(col=>{const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col);ws[XLSX.utils.encode_cell({r:lr,c:ci})]={v:String(row[col]??''),t:'s'};});});
+    newRows.forEach(row=>{lr++;COLS.forEach(col=>{const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col);const v=row[col]??'';const isNum=typeof v==='number';ws[XLSX.utils.encode_cell({r:lr,c:ci})]={v:isNum?v:String(v),t:isNum?'n':'s'};});});
     const nr=XLSX.utils.decode_range(ws['!ref']);nr.e.r=lr;nr.e.c=Math.max(nr.e.c,COLS.length-1);ws['!ref']=XLSX.utils.encode_range(nr);
     fname=`${uploadedSheet.replace(/[^a-zA-Z0-9가-힣_-]/g,'_')}_append_${new Date().toISOString().slice(0,10)}.xlsx`;
   }else{
