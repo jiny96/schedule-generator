@@ -734,6 +734,19 @@ function generate(){
 }
 function backBulk(){document.getElementById('view-prev').style.display='none';document.getElementById('view-bulk').style.display='';}
 
+/* ═══ 날짜 문자열 → 엑셀 시리얼 변환 ═══ */
+function parseExcelDate(str){
+  // "2026-05-20  2:00:00 AM" 형태 파싱
+  const m=str.trim().match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+  if(!m)return null;
+  let h=parseInt(m[4]);const mn=parseInt(m[5]),sc=parseInt(m[6]),ap=m[7].toUpperCase();
+  if(ap==='AM'&&h===12)h=0;if(ap==='PM'&&h!==12)h+=12;
+  const d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]),h,mn,sc);
+  // 엑셀 시리얼: 1900-01-01 기준 일수 (엑셀 1900 버그 포함)
+  const epoch=new Date(1899,11,30);
+  return(d-epoch)/(86400*1000);
+}
+
 /* ═══ Download ═══ */
 function downloadExcel(){
   if(!newRows.length)return;
@@ -742,12 +755,72 @@ function downloadExcel(){
     wb=uploadedWb;const ws=wb.Sheets[uploadedSheet];
     const range=XLSX.utils.decode_range(ws['!ref']||'A1');let lr=range.e.r;
     const hm={};existHdr.forEach((h,i)=>{hm[h]=i;});
-    newRows.forEach(row=>{lr++;COLS.forEach(col=>{const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col);const v=row[col]??'';const isNum=typeof v==='number';ws[XLSX.utils.encode_cell({r:lr,c:ci})]={v:isNum?v:String(v),t:isNum?'n':'s'};});});
+
+    // 기존 데이터 1행에서 각 컬럼의 셀 타입 파악
+    const colTypeMap={};
+    if(existRows.length>0){
+      COLS.forEach(col=>{
+        const ci=hm[col];
+        if(ci===undefined)return;
+        // 헤더(row0) 다음 첫 데이터행(row2)의 셀 타입 확인
+        const addr=XLSX.utils.encode_cell({r:2,c:ci});
+        const cell=ws[addr];
+        if(cell)colTypeMap[col]=cell.t;
+      });
+    }
+
+    const dateCols2=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
+    newRows.forEach(row=>{
+      lr++;
+      COLS.forEach(col=>{
+        const ci=hm[col]!==undefined?hm[col]:COLS.indexOf(col);
+        const v=row[col]??'';
+        const existType=colTypeMap[col];
+        let cellObj;
+        if(typeof v==='number'){
+          cellObj={v,t:'n'};
+        } else if(dateCols2.has(col)&&v!==''){
+          const parsed=parseExcelDate(String(v));
+          if(parsed!=null){
+            cellObj={v:parsed,t:'n',z:'YYYY-MM-DD  H:MM:SS AM/PM'};
+          } else {
+            cellObj={v:String(v),t:'s'};
+          }
+        } else if(existType&&existType!=='s'){
+          cellObj={v:String(v),t:existType};
+        } else {
+          cellObj={v:String(v),t:'s'};
+        }
+        ws[XLSX.utils.encode_cell({r:lr,c:ci})]=cellObj;
+      });
+    });
     const nr=XLSX.utils.decode_range(ws['!ref']);nr.e.r=lr;nr.e.c=Math.max(nr.e.c,COLS.length-1);ws['!ref']=XLSX.utils.encode_range(nr);
     fname=`${uploadedSheet.replace(/[^a-zA-Z0-9가-힣_-]/g,'_')}_append_${new Date().toISOString().slice(0,10)}.xlsx`;
   }else{
     wb=XLSX.utils.book_new();
-    const ws=XLSX.utils.aoa_to_sheet([COLS,...newRows.map(r=>COLS.map(c=>r[c]??''))]);
+    const ws={};
+    const allRows=[COLS,...newRows.map(r=>COLS.map(c=>r[c]??''))];
+    const dateCols=new Set(['DisplayDate','CreateDate','PushDate','StandbyDate','StartDate','RegDate']);
+    allRows.forEach((row,ri)=>{
+      row.forEach((v,ci)=>{
+        const addr=XLSX.utils.encode_cell({r:ri,c:ci});
+        if(ri===0){
+          ws[addr]={v:String(v),t:'s'};
+        } else {
+          const col=COLS[ci];
+          if(typeof v==='number'){
+            ws[addr]={v,t:'n'};
+          } else if(dateCols.has(col)&&v!==''){
+            // 날짜 문자열 → 엑셀 날짜 시리얼로 변환
+            const parsed=parseExcelDate(String(v));
+            ws[addr]=parsed!=null?{v:parsed,t:'n',z:'YYYY-MM-DD  H:MM:SS AM/PM'}:{v:String(v),t:'s'};
+          } else {
+            ws[addr]={v:String(v),t:'s'};
+          }
+        }
+      });
+    });
+    ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:allRows.length-1,c:COLS.length-1}});
     ws['!cols']=COLS.map(c=>({wch:c==='TnmtScheduleSrl'?20:c.includes('Date')?24:16}));
     COLS.forEach((_,i)=>{const cell=XLSX.utils.encode_cell({r:0,c:i});if(ws[cell])ws[cell].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'3D7A4F'}},alignment:{horizontal:'center'}};});
     XLSX.utils.book_append_sheet(wb,ws,'TnmtSchedule');
